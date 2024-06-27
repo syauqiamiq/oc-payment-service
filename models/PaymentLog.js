@@ -11,7 +11,22 @@ module.exports = (sequelize, DataTypes) => {
 				primaryKey: true,
 				defaultValue: DataTypes.UUIDV4,
 			},
-			images: DataTypes.STRING,
+			status: {
+				field: "status",
+				type: DataTypes.STRING,
+			},
+			paymentType: {
+				field: "payment_type",
+				type: DataTypes.STRING,
+			},
+			orderId: {
+				field: "order_id",
+				type: DataTypes.UUIDV4,
+			},
+			rawResponse: {
+				field: "raw_response",
+				type: DataTypes.JSON,
+			},
 			createdAt: {
 				field: "created_at",
 				type: DataTypes.DATE,
@@ -30,7 +45,7 @@ module.exports = (sequelize, DataTypes) => {
 		},
 		{
 			sequelize,
-			tableName: "payment-logs",
+			tableName: "payment_logs",
 			underscored: true,
 			paranoid: true,
 		}

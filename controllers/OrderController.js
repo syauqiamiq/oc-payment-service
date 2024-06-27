@@ -107,79 +107,123 @@ const CreateOrder = async (req, res) => {
 				data: null,
 			});
 		}
-		// CHECK DUPLICATE ORDER ON THIS COURSE
-		const foundPendingOrder = await models.Order.findOne({
-			where: { status: "PENDING", userId: user_id, courseId: course_id },
-		});
-		if (foundPendingOrder !== null) {
-			return res.status(409).json({
-				status: "error",
-				code: 409,
-				message: "You have pending order for this course",
-				data: null,
+
+		// CHECK COURSE FREE OR PREMIUM
+		if (courseData.data?.data.type == "PAID") {
+			// DO CHECKOUT PROCESS
+			// CHECK DUPLICATE ORDER ON THIS COURSE
+			const foundPendingOrder = await models.Order.findOne({
+				where: { status: "PENDING", userId: user_id, courseId: course_id },
 			});
-		}
-		// CHECK COURSE PRICE MUST BE NOT 0
-		if (courseData.data?.data?.price === 0) {
-			return res.status(400).json({
-				status: "error",
-				code: 400,
-				message: "Price cannot be zero",
-				data: null,
-			});
-		}
-		// CREATE ORDER
-		const createdOrder = await models.Order.create({
-			userId: user_id,
-			courseId: course_id,
-		});
-
-		// CREATE MIDTRANS SNAP
-		let snap = new midtransClient.Snap({
-			isProduction: false,
-			serverKey: MIDTRANS_SERVER_KEY,
-			clientKey: MIDTRANS_CLIENT_KEY,
-		});
-
-		const parameter = {
-			customer_details: {
-				email: userData.data?.data?.email,
-			},
-			item_details: [
-				{
-					id: courseData.data?.data?.id,
-					price: courseData.data?.data?.price,
-					quantity: 1,
-					name: courseData.data?.data?.name,
-					brand: "Pandaz Technology",
-				},
-			],
-			transaction_details: {
-				order_id: orderHelper.generateOrderId(courseData.data?.data?.id),
-				gross_amount: courseData.data?.data?.price,
-			},
-			credit_card: {
-				secure: true,
-			},
-		};
-
-		const createdTransaction = await snap.createTransaction(parameter);
-		await models.Order.update(
-			{
-				snapUrl: createdTransaction.redirect_url,
-				metaData: courseData.data?.data,
-			},
-			{
-				where: {
-					id: createdOrder.id,
-				},
+			if (foundPendingOrder !== null) {
+				return res.status(409).json({
+					status: "error",
+					code: 409,
+					message: "You have pending order for this course",
+					data: null,
+				});
 			}
-		);
+			// CHECK COURSE PRICE MUST BE NOT 0
+			if (courseData.data?.data?.price === 0) {
+				return res.status(400).json({
+					status: "error",
+					code: 400,
+					message: "Price cannot be zero",
+					data: null,
+				});
+			}
+			// CREATE ORDER
+			const createdOrder = await models.Order.create({
+				userId: user_id,
+				courseId: course_id,
+			});
+
+			// CREATE MIDTRANS SNAP
+			let snap = new midtransClient.Snap({
+				isProduction: false,
+				serverKey: MIDTRANS_SERVER_KEY,
+				clientKey: MIDTRANS_CLIENT_KEY,
+			});
+
+			const externalOrderId = orderHelper.generateOrderId(
+				courseData.data?.data?.id
+			);
+			const parameter = {
+				customer_details: {
+					email: userData.data?.data?.email,
+				},
+				item_details: [
+					{
+						id: courseData.data?.data?.id,
+						price: courseData.data?.data?.price,
+						quantity: 1,
+						name: courseData.data?.data?.name,
+						brand: "Pandaz Technology",
+					},
+				],
+				transaction_details: {
+					order_id: externalOrderId,
+					gross_amount: courseData.data?.data?.price,
+				},
+				credit_card: {
+					secure: true,
+				},
+			};
+
+			const createdTransaction = await snap.createTransaction(parameter);
+			await models.Order.update(
+				{
+					snapUrl: createdTransaction.redirect_url,
+					metaData: courseData.data?.data,
+					externalOrderId: externalOrderId,
+				},
+				{
+					where: {
+						id: createdOrder.id,
+					},
+				}
+			);
+			return res.status(200).json({
+				status: "success",
+				code: 200,
+				message: "Success",
+				data: {
+					assign_status: "paid first",
+					midtrans_payment: createdTransaction,
+				},
+			});
+		}
+
+		// ASSIGN FREE COURSE
+		try {
+			await courseApi.post(`/my-course`, {
+				user_id: user_id,
+				course_id: courseData.data?.data?.id,
+			});
+		} catch (error) {
+			if (error.response && error.response.status === 404) {
+				return res.status(404).json({
+					status: "error",
+					code: 404,
+					message: "Course not found",
+					data: null,
+				});
+			}
+			return res.status(500).json({
+				status: "error",
+				code: 503,
+				message: "Course Service Unavailable",
+				data: null,
+			});
+		}
 		return res.status(200).json({
 			status: "success",
 			code: 200,
 			message: "Success",
-			data: createdTransaction,
+			data: {
+				assign_status: "success",
+				midtrans_payment: null,
+			},
 		});
 	} catch (error) {
 		return res.status(400).json({
