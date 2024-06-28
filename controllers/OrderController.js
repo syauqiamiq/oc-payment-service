@@ -24,11 +24,28 @@ const GetOrder = async (req, res) => {
 		const orderData = await models.Order.findAll({
 			where: whereClause,
 		});
+
+
+		let formattedResponse = []
+		orderData.forEach(v => {
+			formattedResponse.push({
+				id: v.id,
+				status: v.status,
+				user_id: v.userId,
+				course_id: v.courseId,
+				snap_url: v.snapUrl,
+				external_order_id: v.externalOrderId,
+				meta_data: v.metaData,
+				created_at: v.createdAt,
+				updated_at: v.updatedAt,
+				deleted_at: v.deletedAt
+			})
+		});
 		return res.status(200).json({
 			status: "success",
 			code: 200,
 			message: "Success",
-			data: orderData,
+			data: formattedResponse,
 		});
 	} catch (error) {
 		return res.status(400).json({
